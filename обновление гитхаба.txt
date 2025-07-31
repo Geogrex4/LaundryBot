@@ -1,3 +1,0 @@
-git add bot.py
-git commit -m "fix: update bot logic with safer timeout handling"
-git push
