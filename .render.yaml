@@ -4,9 +4,8 @@ services:
     env: python
     region: oregon
     plan: free
-    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
-        value: your_actual_telegram_token
+        value: 8414426361:AAGEvN-ldkYN06WMsCNaHTCaQNfoxt90zWc
