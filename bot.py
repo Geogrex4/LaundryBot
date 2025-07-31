@@ -13,11 +13,7 @@ from telegram.ext import (
 DATA_FILE = "data.json"
 TIMEOUT_SECONDS = 2.5 * 60 * 60  # 2.5 часа
 
-machines = {
-    "Белая": [],
-    "Чёрная": [],
-    "Роба": []
-}
+machines = {"Белая": [], "Чёрная": [], "Роба": []}
 timeouts = {}
 user_ids = {}
 
@@ -52,8 +48,10 @@ def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
             save_data()
             chat_id = user_ids.get(username)
             if chat_id:
-                await context.bot.send_message(chat_id=chat_id,
-                                               text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}."
+                )
             await notify_next(machine_name, context)
 
     timeouts[machine_name] = asyncio.create_task(timeout_task())
@@ -65,8 +63,10 @@ async def notify_next(machine_name, context: ContextTypes.DEFAULT_TYPE):
         next_user = queue[0]
         chat_id = user_ids.get(next_user)
         if chat_id:
-            await context.bot.send_message(chat_id=chat_id,
-                                           text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🧺 Теперь ты первый в очереди на {machine_name}!"
+            )
             start_timeout(machine_name, next_user, context)
 
 
@@ -171,12 +171,8 @@ async def main():
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.wait_for_stop()
-    await app.stop()
-    await app.shutdown()
+    await app.run_polling()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
