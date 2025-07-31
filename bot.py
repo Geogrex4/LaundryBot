@@ -1,21 +1,14 @@
+# -*- coding: utf-8 -*-
 import os
 import json
 import asyncio
-import logging
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application,
     ApplicationBuilder,
     ContextTypes,
     CommandHandler,
     MessageHandler,
     filters,
-)
-
-# Логирование
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
 )
 
 DATA_FILE = "data.json"
@@ -55,10 +48,8 @@ def start_timeout(machine, user, app):
             machines[machine].pop(0)
             save_data()
             if user in user_ids:
-                await app.bot.send_message(
-                    chat_id=user_ids[user],
-                    text=f"? Время вышло. Ты удалён из очереди на {machine}."
-                )
+                await app.bot.send_message(chat_id=user_ids[user],
+                                           text=f"? Время вышло. Ты удалён из очереди на {machine}.")
             await notify_next(machine, app)
 
     timeouts[machine] = asyncio.create_task(task())
@@ -68,10 +59,8 @@ async def notify_next(machine, app):
     if machines[machine]:
         next_user = machines[machine][0]
         if next_user in user_ids:
-            await app.bot.send_message(
-                chat_id=user_ids[next_user],
-                text=f"?? Теперь ты первый в очереди на {machine}!"
-            )
+            await app.bot.send_message(chat_id=user_ids[next_user],
+                                       text=f"?? Теперь ты первый в очереди на {machine}!")
             start_timeout(machine, next_user, app)
 
 
@@ -139,9 +128,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in machines:
         if username in machines[text]:
             pos = machines[text].index(username) + 1
-            await update.message.reply_text(
-                f"Ты уже в очереди на {text}, позиция: {pos}", reply_markup=back_reply
-            )
+            await update.message.reply_text(f"Ты уже в очереди на {text}, позиция: {pos}", reply_markup=back_reply)
         else:
             machines[text].append(username)
             save_data()
@@ -149,14 +136,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pos == 1:
                 await update.message.reply_text(
                     f"? Ты записан на {text}.\nТы первый!\n? У тебя есть 2.5 часа.",
-                    reply_markup=back_reply
-                )
+                    reply_markup=back_reply)
                 start_timeout(text, username, context.application)
             else:
                 await update.message.reply_text(
-                    f"?? Ты в очереди на {text}, твоя позиция: {pos}",
-                    reply_markup=back_reply
-                )
+                    f"?? Ты в очереди на {text}, твоя позиция: {pos}", reply_markup=back_reply)
         return
 
     await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
@@ -176,7 +160,6 @@ async def run():
     application.add_handler(CommandHandler("reset", cmd_reset))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logging.info("Starting bot polling...")
     await application.run_polling()
 
 
