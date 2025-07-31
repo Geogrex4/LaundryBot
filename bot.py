@@ -1,8 +1,6 @@
 import os
 import json
 import asyncio
-from flask import Flask, request
-
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -12,7 +10,6 @@ from telegram.ext import (
     filters,
 )
 
-# === Настройки ===
 DATA_FILE = "data.json"
 TIMEOUT_SECONDS = 2.5 * 60 * 60  # 2.5 часа
 
@@ -31,16 +28,18 @@ back_button = [["⬅️ Назад"]]
 main_reply = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
 back_reply = ReplyKeyboardMarkup(back_button, resize_keyboard=True)
 
-# === Загрузка/сохранение данных ===
+
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {"Белая": [], "Чёрная": [], "Роба": []}
 
+
 def save_data():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(machines, f, ensure_ascii=False, indent=2)
+
 
 def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
     if machine_name in timeouts:
@@ -59,6 +58,7 @@ def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
 
     timeouts[machine_name] = asyncio.create_task(timeout_task())
 
+
 async def notify_next(machine_name, context: ContextTypes.DEFAULT_TYPE):
     queue = machines[machine_name]
     if queue:
@@ -69,17 +69,19 @@ async def notify_next(machine_name, context: ContextTypes.DEFAULT_TYPE):
                                            text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
             start_timeout(machine_name, next_user, context)
 
-# === Команды ===
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
     user_ids[username] = user.id
     await update.message.reply_text("Привет! Выбери машинку:", reply_markup=main_reply)
 
+
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     user_ids[username] = update.effective_user.id
     await update.message.reply_text("🔁 Бот перезагружен!", reply_markup=main_reply)
+
 
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for m in machines:
@@ -87,7 +89,7 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data()
     await update.message.reply_text("Очереди сброшены.", reply_markup=main_reply)
 
-# === Сообщения ===
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     username = user.username or user.first_name
@@ -157,32 +159,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
 
-# === Flask-сервер + Webhook ===
-TOKEN = os.environ.get("BOT_TOKEN")
-app = Flask(__name__)
-application = Application.builder().token(TOKEN).build()
 
-# Подключение обработчиков
-application.add_handler(CommandHandler("start", cmd_start))
-application.add_handler(CommandHandler("reload", cmd_reload))
-application.add_handler(CommandHandler("reset", cmd_reset))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-# Webhook URL
-WEBHOOK_PATH = f"/{TOKEN}"
-WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL") + WEBHOOK_PATH
-
-@app.route(WEBHOOK_PATH, methods=["POST"])
-async def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    await application.process_update(update)
-    return "OK"
-
-@app.before_first_request
-def init_bot():
+async def main():
+    global machines
     machines.update(load_data())
-    application.bot.set_webhook(WEBHOOK_URL)
+
+    app = Application.builder().token(os.environ["BOT_TOKEN"]).build()
+
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("reload", cmd_reload))
+    app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.wait_for_stop()
+    await app.stop()
+    await app.shutdown()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    asyncio.run(main())
