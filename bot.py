@@ -169,7 +169,8 @@ def main():
     global machines
     machines.update(load_data())
 
-    app = Application.builder().token("7569986444:AAENWp7qyes24-Ja30abCxuL3F0J1iMTCMU").build()
+    import os
+    app = Application.builder().token(os.environ["BOT_TOKEN"]).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(CommandHandler("reset", cmd_reset))
