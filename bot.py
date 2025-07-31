@@ -4,7 +4,7 @@ import json
 import asyncio
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application,
+    ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     ContextTypes,
@@ -42,7 +42,7 @@ def save_data():
         json.dump(machines, f, ensure_ascii=False, indent=2)
 
 
-def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
+def start_timeout(machine_name, username, application):
     if machine_name in timeouts:
         timeouts[machine_name].cancel()
 
@@ -53,22 +53,22 @@ def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
             save_data()
             chat_id = user_ids.get(username)
             if chat_id:
-                await context.bot.send_message(chat_id=chat_id,
-                                               text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
-            await notify_next(machine_name, context)
+                await application.bot.send_message(chat_id=chat_id,
+                                                   text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
+            await notify_next(machine_name, application)
 
     timeouts[machine_name] = asyncio.create_task(timeout_task())
 
 
-async def notify_next(machine_name, context: ContextTypes.DEFAULT_TYPE):
+async def notify_next(machine_name, application):
     queue = machines[machine_name]
     if queue:
         next_user = queue[0]
         chat_id = user_ids.get(next_user)
         if chat_id:
-            await context.bot.send_message(chat_id=chat_id,
-                                           text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
-            start_timeout(machine_name, next_user, context)
+            await application.bot.send_message(chat_id=chat_id,
+                                               text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
+            start_timeout(machine_name, next_user, application)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,6 +96,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or user.first_name
     user_ids[username] = user.id
     text = update.message.text
+    app = context.application
 
     if text == "⬅️ Назад":
         await update.message.reply_text("Главное меню:", reply_markup=main_reply)
@@ -118,7 +119,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 was_first = machines[m][0] == username
                 machines[m].remove(username)
                 if was_first:
-                    await notify_next(m, context)
+                    await notify_next(m, app)
                 left_machines.append(m)
         save_data()
         msg = f"🚪 Покинул: {', '.join(left_machines)}" if left_machines else "Ты не в очереди."
@@ -132,7 +133,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 machines[m].pop(0)
                 if m in timeouts:
                     timeouts[m].cancel()
-                await notify_next(m, context)
+                await notify_next(m, app)
                 done.append(m)
         save_data()
         msg = f"✅ Завершено: {', '.join(done)}" if done else "Ты не первый ни на одной машине."
@@ -151,7 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     f"✅ Ты записан на {text}.\nТы первый!\n⏰ У тебя есть 2.5 часа до автоматического удаления.",
                     reply_markup=back_reply)
-                start_timeout(text, username, context)
+                start_timeout(text, username, app)
             else:
                 await update.message.reply_text(
                     f"🔔 Ты в очереди на {text}, твоя позиция: {pos}",
@@ -161,19 +162,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
 
 
-def main():
+async def main():
     global machines
     machines.update(load_data())
 
-    app = Application.builder().token(os.environ["BOT_TOKEN"]).build()
+    app = ApplicationBuilder().token(os.environ["BOT_TOKEN"]).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    app.run_polling()
+    print("🤖 Бот запущен!")
+    await app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
