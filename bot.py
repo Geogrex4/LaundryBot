@@ -1,32 +1,32 @@
-import os
-import json
 import asyncio
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+import json
+import os
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart, Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.enums import ParseMode
 
+TOKEN = os.getenv("BOT_TOKEN")
 DATA_FILE = "data.json"
-TIMEOUT_SECONDS = 2.5 * 60 * 60  # 2.5 часа
+TIMEOUT = 2.5 * 60 * 60
 
-machines = {
-    "Белая": [],
-    "Чёрная": [],
-    "Роба": []
-}
+machines = {"Белая": [], "Чёрная": [], "Роба": []}
 timeouts = {}
 user_ids = {}
 
-main_menu = [["Белая", "Чёрная", "Роба"],
-             ["📋 Очередь", "🔄 Статус"],
-             ["🚪 Покинуть очередь", "🧼 Завершил стирку"]]
-back_button = [["⬅️ Назад"]]
-main_reply = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
-back_reply = ReplyKeyboardMarkup(back_button, resize_keyboard=True)
+main_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Белая"), KeyboardButton(text="Чёрная"), KeyboardButton(text="Роба")],
+        [KeyboardButton(text="📋 Очередь"), KeyboardButton(text="🔄 Статус")],
+        [KeyboardButton(text="🚪 Покинуть очередь"), KeyboardButton(text="🧼 Завершил стирку")]
+    ],
+    resize_keyboard=True
+)
+
+back_menu = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="⬅️ Назад")]],
+    resize_keyboard=True
+)
 
 
 def load_data():
@@ -41,142 +41,127 @@ def save_data():
         json.dump(machines, f, ensure_ascii=False, indent=2)
 
 
-def start_timeout(machine_name, username, context: ContextTypes.DEFAULT_TYPE):
-    if machine_name in timeouts:
-        timeouts[machine_name].cancel()
+async def notify_next(bot: Bot, machine: str):
+    if machines[machine]:
+        next_user = machines[machine][0]
+        if next_user in user_ids:
+            await bot.send_message(user_ids[next_user], f"🧺 Теперь ты первый в очереди на {machine}!")
+            await start_timeout(bot, machine, next_user)
 
-    async def timeout_task():
-        await asyncio.sleep(TIMEOUT_SECONDS)
-        if machines[machine_name] and machines[machine_name][0] == username:
-            machines[machine_name].pop(0)
+
+async def start_timeout(bot: Bot, machine: str, username: str):
+    if machine in timeouts:
+        timeouts[machine].cancel()
+
+    async def task():
+        await asyncio.sleep(TIMEOUT)
+        if machines[machine] and machines[machine][0] == username:
+            machines[machine].pop(0)
             save_data()
-            chat_id = user_ids.get(username)
-            if chat_id:
-                await context.bot.send_message(chat_id=chat_id,
-                                               text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
-            await notify_next(machine_name, context)
+            if username in user_ids:
+                await bot.send_message(user_ids[username], f"⏰ Время вышло. Ты удалён из очереди на {machine}.")
+            await notify_next(bot, machine)
 
-    timeouts[machine_name] = asyncio.create_task(timeout_task())
+    timeouts[machine] = asyncio.create_task(task())
 
 
-async def notify_next(machine_name, context: ContextTypes.DEFAULT_TYPE):
-    queue = machines[machine_name]
-    if queue:
-        next_user = queue[0]
-        chat_id = user_ids.get(next_user)
-        if chat_id:
-            await context.bot.send_message(chat_id=chat_id,
-                                           text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
-            start_timeout(machine_name, next_user, context)
+dp = Dispatcher()
 
 
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    username = user.username or user.first_name
-    user_ids[username] = user.id
-    await update.message.reply_text("Привет! Выбери машинку:", reply_markup=main_reply)
+@dp.message(CommandStart())
+async def handle_start(message: types.Message):
+    username = message.from_user.username or message.from_user.first_name
+    user_ids[username] = message.from_user.id
+    await message.answer("Привет! Выбери машинку:", reply_markup=main_menu)
 
 
-async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.first_name
-    user_ids[username] = update.effective_user.id
-    await update.message.reply_text("🔁 Бот перезагружен!", reply_markup=main_reply)
-
-
-async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@dp.message(Command("reset"))
+async def handle_reset(message: types.Message):
     for m in machines:
         machines[m] = []
     save_data()
-    await update.message.reply_text("Очереди сброшены.", reply_markup=main_reply)
+    await message.answer("Очереди сброшены.", reply_markup=main_menu)
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    username = user.username or user.first_name
-    user_ids[username] = user.id
-    text = update.message.text
+@dp.message()
+async def handle_message(message: types.Message):
+    username = message.from_user.username or message.from_user.first_name
+    user_ids[username] = message.from_user.id
+    text = message.text
 
     if text == "⬅️ Назад":
-        await update.message.reply_text("Главное меню:", reply_markup=main_reply)
-        return
+        await message.answer("Главное меню:", reply_markup=main_menu)
 
-    if text == "🔄 Статус":
-        status_lines = [f"{m}: {machines[m][0] if machines[m] else 'Свободна'}" for m in machines]
-        await update.message.reply_text("Статус машин:\n" + "\n".join(status_lines), reply_markup=back_reply)
-        return
+    elif text == "📋 Очередь":
+        lines = []
+        for m in machines:
+            queue = "\n".join(machines[m]) if machines[m] else "— пусто"
+            lines.append(f"{m}:\n{queue}")
+        await message.answer("\n\n".join(lines), reply_markup=back_menu)
 
-    if text == "📋 Очередь":
-        queue_text = "\n\n".join([f"{m}:\n" + ("\n".join(machines[m]) if machines[m] else "— пусто") for m in machines])
-        await update.message.reply_text("Очереди:\n" + queue_text, reply_markup=back_reply)
-        return
+    elif text == "🔄 Статус":
+        lines = [f"{m}: {machines[m][0] if machines[m] else 'Свободна'}" for m in machines]
+        await message.answer("\n".join(lines), reply_markup=back_menu)
 
-    if text == "🚪 Покинуть очередь":
-        left_machines = []
+    elif text == "🚪 Покинуть очередь":
+        removed = []
         for m in machines:
             if username in machines[m]:
                 was_first = machines[m][0] == username
                 machines[m].remove(username)
                 if was_first:
-                    await notify_next(m, context)
-                left_machines.append(m)
+                    await notify_next(message.bot, m)
+                removed.append(m)
         save_data()
-        msg = f"🚪 Покинул: {', '.join(left_machines)}" if left_machines else "Ты не в очереди."
-        await update.message.reply_text(msg, reply_markup=back_reply)
-        return
+        if removed:
+            await message.answer(f"🚪 Покинул: {', '.join(removed)}", reply_markup=back_menu)
+        else:
+            await message.answer("Ты не в очереди.", reply_markup=back_menu)
 
-    if text == "🧼 Завершил стирку":
+    elif text == "🧼 Завершил стирку":
         done = []
         for m in machines:
             if machines[m] and machines[m][0] == username:
                 machines[m].pop(0)
                 if m in timeouts:
                     timeouts[m].cancel()
-                await notify_next(m, context)
+                await notify_next(message.bot, m)
                 done.append(m)
         save_data()
-        msg = f"✅ Завершено: {', '.join(done)}" if done else "Ты не первый ни на одной машине."
-        await update.message.reply_text(msg, reply_markup=back_reply)
-        return
+        if done:
+            await message.answer(f"✅ Завершено: {', '.join(done)}", reply_markup=back_menu)
+        else:
+            await message.answer("Ты не первый ни на одной машине.", reply_markup=back_menu)
 
-    if text in machines:
+    elif text in machines:
         if username in machines[text]:
             pos = machines[text].index(username) + 1
-            await update.message.reply_text(f"Ты уже в очереди на {text}, позиция: {pos}", reply_markup=back_reply)
+            await message.answer(f"Ты уже в очереди на {text}, позиция: {pos}", reply_markup=back_menu)
         else:
             machines[text].append(username)
             save_data()
             pos = len(machines[text])
             if pos == 1:
-                await update.message.reply_text(
-                    f"✅ Ты записан на {text}.\nТы первый!\n⏰ У тебя есть 2.5 часа до автоматического удаления.",
-                    reply_markup=back_reply)
-                start_timeout(text, username, context)
+                await message.answer(
+                    f"✅ Ты записан на {text}. Ты первый!\n⏰ У тебя есть 2.5 часа.",
+                    reply_markup=back_menu
+                )
+                await start_timeout(message.bot, text, username)
             else:
-                await update.message.reply_text(
+                await message.answer(
                     f"🔔 Ты в очереди на {text}, твоя позиция: {pos}",
-                    reply_markup=back_reply)
-        return
-
-    await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
+                    reply_markup=back_menu
+                )
+    else:
+        await message.answer("Выбери действие из меню:", reply_markup=main_menu)
 
 
 async def main():
     global machines
     machines.update(load_data())
+    bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+    await dp.start_polling(bot)
 
-    app = Application.builder().token(os.environ["BOT_TOKEN"]).build()
-
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("reload", cmd_reload))
-    app.add_handler(CommandHandler("reset", cmd_reset))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.wait_for_stop()
-    await app.stop()
-    await app.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())

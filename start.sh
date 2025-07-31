@@ -1,3 +1,3 @@
 #!/bin/bash
-pip install -r requirements.txt
+echo "Running LaundryBot with aiogram..."
 python bot.py

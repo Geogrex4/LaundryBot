@@ -1,7 +1,10 @@
 services:
   - type: web
-    name: washing-bot
+    name: laundrybot
     env: python
-    plan: free
     buildCommand: ""
     startCommand: bash start.sh
+    plan: free
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
