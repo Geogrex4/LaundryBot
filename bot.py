@@ -1,4 +1,3 @@
-
 import os
 import json
 import asyncio
@@ -42,7 +41,7 @@ def save_data():
         json.dump(machines, f, ensure_ascii=False, indent=2)
 
 
-def start_timeout(machine_name, username, application):
+def start_timeout(machine_name, username, app):
     if machine_name in timeouts:
         timeouts[machine_name].cancel()
 
@@ -53,22 +52,22 @@ def start_timeout(machine_name, username, application):
             save_data()
             chat_id = user_ids.get(username)
             if chat_id:
-                await application.bot.send_message(chat_id=chat_id,
-                                                   text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
-            await notify_next(machine_name, application)
+                await app.bot.send_message(chat_id=chat_id,
+                                           text=f"⏰ Время вышло. Ты удалён из очереди на {machine_name}.")
+            await notify_next(machine_name, app)
 
     timeouts[machine_name] = asyncio.create_task(timeout_task())
 
 
-async def notify_next(machine_name, application):
+async def notify_next(machine_name, app):
     queue = machines[machine_name]
     if queue:
         next_user = queue[0]
         chat_id = user_ids.get(next_user)
         if chat_id:
-            await application.bot.send_message(chat_id=chat_id,
-                                               text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
-            start_timeout(machine_name, next_user, application)
+            await app.bot.send_message(chat_id=chat_id,
+                                       text=f"🧺 Теперь ты первый в очереди на {machine_name}!")
+            start_timeout(machine_name, next_user, app)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,6 +95,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username or user.first_name
     user_ids[username] = user.id
     text = update.message.text
+
     app = context.application
 
     if text == "⬅️ Назад":
@@ -173,9 +173,10 @@ async def main():
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Бот запущен!")
-    await app.run_polling()
-
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 if __name__ == "__main__":
     asyncio.run(main())
