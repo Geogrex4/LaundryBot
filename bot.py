@@ -12,16 +12,16 @@ from telegram.ext import (
 )
 
 DATA_FILE = "data.json"
-TIMEOUT_SECONDS = 2.5 * 60 * 60  # 2.5 часа
+TIMEOUT_SECONDS = 2.5 * 60 * 60  # 2.5 С‡Р°СЃР°
 
-machines = {"Белая": [], "Чёрная": [], "Роба": []}
+machines = {"Р‘РµР»Р°СЏ": [], "Р§С‘СЂРЅР°СЏ": [], "Р РѕР±Р°": []}
 timeouts = {}
 user_ids = {}
 
-main_menu = [["Белая", "Чёрная", "Роба"],
-             ["?? Очередь", "?? Статус"],
-             ["?? Покинуть очередь", "?? Завершил стирку"]]
-back_button = [["?? Назад"]]
+main_menu = [["Р‘РµР»Р°СЏ", "Р§С‘СЂРЅР°СЏ", "Р РѕР±Р°"],
+             ["рџ“‹ РћС‡РµСЂРµРґСЊ", "рџ”„ РЎС‚Р°С‚СѓСЃ"],
+             ["рџљЄ РџРѕРєРёРЅСѓС‚СЊ РѕС‡РµСЂРµРґСЊ", "рџ§ј Р—Р°РІРµСЂС€РёР» СЃС‚РёСЂРєСѓ"]]
+back_button = [["в¬…пёЏ РќР°Р·Р°Рґ"]]
 main_reply = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
 back_reply = ReplyKeyboardMarkup(back_button, resize_keyboard=True)
 
@@ -30,7 +30,7 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    return {"Белая": [], "Чёрная": [], "Роба": []}
+    return {"Р‘РµР»Р°СЏ": [], "Р§С‘СЂРЅР°СЏ": [], "Р РѕР±Р°": []}
 
 
 def save_data():
@@ -49,7 +49,7 @@ def start_timeout(machine, user, app):
             save_data()
             if user in user_ids:
                 await app.bot.send_message(chat_id=user_ids[user],
-                                           text=f"? Время вышло. Ты удалён из очереди на {machine}.")
+                                           text=f"вЏ° Р’СЂРµРјСЏ РІС‹С€Р»Рѕ. РўС‹ СѓРґР°Р»С‘РЅ РёР· РѕС‡РµСЂРµРґРё РЅР° {machine}.")
             await notify_next(machine, app)
 
     timeouts[machine] = asyncio.create_task(task())
@@ -60,21 +60,21 @@ async def notify_next(machine, app):
         next_user = machines[machine][0]
         if next_user in user_ids:
             await app.bot.send_message(chat_id=user_ids[next_user],
-                                       text=f"?? Теперь ты первый в очереди на {machine}!")
+                                       text=f"рџ§є РўРµРїРµСЂСЊ С‚С‹ РїРµСЂРІС‹Р№ РІ РѕС‡РµСЂРµРґРё РЅР° {machine}!")
             start_timeout(machine, next_user, app)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     user_ids[username] = update.effective_user.id
-    await update.message.reply_text("Привет! Выбери машинку:", reply_markup=main_reply)
+    await update.message.reply_text("РџСЂРёРІРµС‚! Р’С‹Р±РµСЂРё РјР°С€РёРЅРєСѓ:", reply_markup=main_reply)
 
 
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for m in machines:
         machines[m] = []
     save_data()
-    await update.message.reply_text("Очереди сброшены.", reply_markup=main_reply)
+    await update.message.reply_text("РћС‡РµСЂРµРґРё СЃР±СЂРѕС€РµРЅС‹.", reply_markup=main_reply)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -83,21 +83,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_ids[username] = user.id
     text = update.message.text
 
-    if text == "?? Назад":
-        await update.message.reply_text("Главное меню:", reply_markup=main_reply)
+    if text == "в¬…пёЏ РќР°Р·Р°Рґ":
+        await update.message.reply_text("Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ:", reply_markup=main_reply)
         return
 
-    if text == "?? Статус":
-        status = [f"{m}: {machines[m][0] if machines[m] else 'Свободна'}" for m in machines]
-        await update.message.reply_text("Статус машин:\n" + "\n".join(status), reply_markup=back_reply)
+    if text == "рџ”„ РЎС‚Р°С‚СѓСЃ":
+        status = [f"{m}: {machines[m][0] if machines[m] else 'РЎРІРѕР±РѕРґРЅР°'}" for m in machines]
+        await update.message.reply_text("РЎС‚Р°С‚СѓСЃ РјР°С€РёРЅ:
+" + "
+".join(status), reply_markup=back_reply)
         return
 
-    if text == "?? Очередь":
-        info = [f"{m}:\n" + ("\n".join(machines[m]) if machines[m] else "— пусто") for m in machines]
-        await update.message.reply_text("Очереди:\n" + "\n\n".join(info), reply_markup=back_reply)
+    if text == "рџ“‹ РћС‡РµСЂРµРґСЊ":
+        info = [f"{m}:
+" + ("
+".join(machines[m]) if machines[m] else "вЂ” РїСѓСЃС‚Рѕ") for m in machines]
+        await update.message.reply_text("РћС‡РµСЂРµРґРё:
+" + "
+
+".join(info), reply_markup=back_reply)
         return
 
-    if text == "?? Покинуть очередь":
+    if text == "рџљЄ РџРѕРєРёРЅСѓС‚СЊ РѕС‡РµСЂРµРґСЊ":
         removed = []
         for m in machines:
             if username in machines[m]:
@@ -107,11 +114,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await notify_next(m, context.application)
                 removed.append(m)
         save_data()
-        msg = f"?? Покинул: {', '.join(removed)}" if removed else "Ты не в очереди."
+        msg = f"рџљЄ РџРѕРєРёРЅСѓР»: {', '.join(removed)}" if removed else "РўС‹ РЅРµ РІ РѕС‡РµСЂРµРґРё."
         await update.message.reply_text(msg, reply_markup=back_reply)
         return
 
-    if text == "?? Завершил стирку":
+    if text == "рџ§ј Р—Р°РІРµСЂС€РёР» СЃС‚РёСЂРєСѓ":
         done = []
         for m in machines:
             if machines[m] and machines[m][0] == username:
@@ -121,29 +128,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await notify_next(m, context.application)
                 done.append(m)
         save_data()
-        msg = f"? Завершено: {', '.join(done)}" if done else "Ты не первый ни на одной машине."
+        msg = f"вњ… Р—Р°РІРµСЂС€РµРЅРѕ: {', '.join(done)}" if done else "РўС‹ РЅРµ РїРµСЂРІС‹Р№ РЅРё РЅР° РѕРґРЅРѕР№ РјР°С€РёРЅРµ."
         await update.message.reply_text(msg, reply_markup=back_reply)
         return
 
     if text in machines:
         if username in machines[text]:
             pos = machines[text].index(username) + 1
-            await update.message.reply_text(f"Ты уже в очереди на {text}, позиция: {pos}", reply_markup=back_reply)
+            await update.message.reply_text(f"РўС‹ СѓР¶Рµ РІ РѕС‡РµСЂРµРґРё РЅР° {text}, РїРѕР·РёС†РёСЏ: {pos}", reply_markup=back_reply)
         else:
             machines[text].append(username)
             save_data()
             pos = len(machines[text])
             if pos == 1:
                 await update.message.reply_text(
-                    f"? Ты записан на {text}.\nТы первый!\n? У тебя есть 2.5 часа.",
+                    f"вњ… РўС‹ Р·Р°РїРёСЃР°РЅ РЅР° {text}.
+РўС‹ РїРµСЂРІС‹Р№!
+вЏ° РЈ С‚РµР±СЏ РµСЃС‚СЊ 2.5 С‡Р°СЃР°.",
                     reply_markup=back_reply)
                 start_timeout(text, username, context.application)
             else:
                 await update.message.reply_text(
-                    f"?? Ты в очереди на {text}, твоя позиция: {pos}", reply_markup=back_reply)
+                    f"рџ”” РўС‹ РІ РѕС‡РµСЂРµРґРё РЅР° {text}, С‚РІРѕСЏ РїРѕР·РёС†РёСЏ: {pos}", reply_markup=back_reply)
         return
 
-    await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
+    await update.message.reply_text("Р’С‹Р±РµСЂРё РґРµР№СЃС‚РІРёРµ РёР· РјРµРЅСЋ:", reply_markup=main_reply)
 
 
 async def run():
