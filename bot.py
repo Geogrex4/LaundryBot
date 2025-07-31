@@ -152,7 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Выбери действие из меню:", reply_markup=main_reply)
 
 
-async def run():
+def main():
     global machines
     machines.update(load_data())
 
@@ -166,8 +166,8 @@ async def run():
     application.add_handler(CommandHandler("reset", cmd_reset))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    await application.run_polling()
+    application.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    main()
