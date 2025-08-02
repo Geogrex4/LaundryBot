@@ -41,7 +41,6 @@ def save_data():
 def start_timeout(machine, user, app):
     if machine in timeouts:
         timeouts[machine].cancel()
-
     async def task():
         await asyncio.sleep(TIMEOUT_SECONDS)
         if machines[machine] and machines[machine][0] == user:
@@ -51,7 +50,6 @@ def start_timeout(machine, user, app):
                 await app.bot.send_message(chat_id=user_ids[user],
                                            text=f"⏰ Время вышло. Ты удалён из очереди на {machine}.")
             await notify_next(machine, app)
-
     timeouts[machine] = asyncio.create_task(task())
 
 async def notify_next(machine, app):
@@ -70,6 +68,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for m in machines:
         machines[m] = []
+        if m in timeouts:
+            timeouts[m].cancel()
+            del timeouts[m]
     save_data()
     await update.message.reply_text("Очереди сброшены.", reply_markup=main_reply)
 
@@ -108,6 +109,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if was_first:
                     await notify_next(m, context.application)
                 removed.append(m)
+                # Отменяем таймаут если человек был первым
+                if m in timeouts and was_first:
+                    timeouts[m].cancel()
+                    del timeouts[m]
         save_data()
         msg = f"🚪 Покинул: {', '.join(removed)}" if removed else "Ты не в очереди."
         await update.message.reply_text(msg, reply_markup=back_reply)
@@ -120,6 +125,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 machines[m].pop(0)
                 if m in timeouts:
                     timeouts[m].cancel()
+                    del timeouts[m]
                 await notify_next(m, context.application)
                 done.append(m)
         save_data()
@@ -159,8 +165,14 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app_flask.run(host="0.0.0.0", port=port)
 
+def restart_timeouts(application):
+    # Для каждой очереди, если есть первый пользователь — запускаем таймаут
+    for machine in machines:
+        if machines[machine]:
+            user = machines[machine][0]
+            start_timeout(machine, user, application)
+
 def main():
-    # Use the global machines
     global machines
     machines.update(load_data())
 
@@ -175,6 +187,8 @@ def main():
 
     # Start Flask server in a background thread
     threading.Thread(target=run_flask, daemon=True).start()
+
+    restart_timeouts(application)
 
     application.run_polling()
 
