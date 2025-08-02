@@ -7,5 +7,6 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
-      - key: BOT_TOKEN
-        value: 8414426361:AAGEvN-ldkYN06WMsCNaHTCaQNfoxt90zWc
+      - fromDatabase:
+          name: BOT_TOKEN
+          property: BOT_TOKEN
